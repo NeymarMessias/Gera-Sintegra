@@ -1,18 +1,38 @@
 services:
 
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: gera_sintegra
+      MYSQL_USER: sintegra
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - sintegra_mysql:/var/lib/mysql
+    networks:
+      - sintegra_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sintegra", "--password=${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     image: seu-usuario-dockerhub/gera-sintegra-backend:latest
     # build: ./backend   # descomente para build local
     restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: file:/app/data/production.db
+      DATABASE_URL: mysql://sintegra:${MYSQL_PASSWORD}@mysql:3306/gera_sintegra
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
       UPLOAD_DIR: /app/uploads
     volumes:
-      - sintegra_db:/app/data
       - sintegra_uploads:/app/uploads
     networks:
       - sintegra_net
@@ -23,14 +43,13 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"   # se usar HTTPS via reverse proxy externo, remova esta linha
     depends_on:
       - backend
     networks:
       - sintegra_net
 
 volumes:
-  sintegra_db:
+  sintegra_mysql:
   sintegra_uploads:
 
 networks:

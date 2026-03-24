@@ -11,10 +11,12 @@ node_modules/
 .env.*.local
 
 # ============================================================
-# Banco de dados SQLite (gerado pelo Prisma em dev)
+# Banco de dados local (SQLite legado / arquivos temporários)
 # ============================================================
 backend/prisma/*.db
 backend/prisma/*.db-journal
+*.db
+*.db-journal
 
 # ============================================================
 # Uploads e arquivos gerados pelos usuários

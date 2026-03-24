@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -49,9 +49,9 @@ model Generation {
   status      String   @default("PENDING")
   periodStart DateTime
   periodEnd   DateTime
-  outputFile  String?
-  errorMsg    String?
-  stats       String?
+  outputFile  String?  @db.Text
+  errorMsg    String?  @db.Text
+  stats       String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -67,7 +67,7 @@ model Generation {
 model GenerationFile {
   id           String   @id @default(cuid())
   originalName String
-  storedPath   String
+  storedPath   String   @db.Text
   fileType     String
   createdAt    DateTime @default(now())
 
