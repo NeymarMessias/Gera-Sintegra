@@ -1,7 +1,6 @@
 services:
-
   mysql:
-    image: mysql:8.0
+    image: dhi.io/mysql:9.6
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -11,16 +10,16 @@ services:
     volumes:
       - sintegra_mysql:/var/lib/mysql
     networks:
-      - sintegra_net
+      - app_internal
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "sintegra", "--password=${MYSQL_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   backend:
-    image: seu-usuario-dockerhub/gera-sintegra-backend:latest
-    # build: ./backend   # descomente para build local
+    build:
+      context: ./backend
     restart: unless-stopped
     depends_on:
       mysql:
@@ -34,24 +33,31 @@ services:
       UPLOAD_DIR: /app/uploads
     volumes:
       - sintegra_uploads:/app/uploads
+    expose:
+      - "3001"
     networks:
-      - sintegra_net
+      - app_internal
+      - shared-network
 
   frontend:
-    image: seu-usuario-dockerhub/gera-sintegra-frontend:latest
-    # build: ./frontend  # descomente para build local
+    build:
+      context: ./frontend
     restart: unless-stopped
-    ports:
-      - "80:80"
     depends_on:
       - backend
+    expose:
+      - "80"
     networks:
-      - sintegra_net
+      - app_internal
+      - shared-network
 
 volumes:
   sintegra_mysql:
   sintegra_uploads:
 
 networks:
-  sintegra_net:
+  app_internal:
     driver: bridge
+  shared-network:
+    external: true
+    name: shared-network

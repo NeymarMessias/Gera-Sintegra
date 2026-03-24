@@ -1,20 +1,58 @@
 # SINTEGRA SaaS
 
-Aplicação web SaaS para geração de arquivos SINTEGRA (Convênio ICMS 57/95) a partir de XMLs de NF-e (modelo 55) e NFC-e (modelo 65).
+Aplicacao web para geracao de arquivos SINTEGRA (Convenio ICMS 57/95) a partir de XMLs de NF-e (modelo 55) e NFC-e (modelo 65).
 
 ## Stack
 
-- **Backend:** Node.js + Express + Prisma (SQLite) + JWT
-- **Frontend:** React + Vite + Tailwind CSS
+- Backend: Node.js 24 + Express + Prisma + MySQL + JWT
+- Frontend: React + Vite + Tailwind CSS
+- Infra: Docker Compose + Nginx + Docker Hardened Image `dhi.io/mysql:9.6`
 
-## Pré-requisitos
+## Deploy na VPS
 
-- Node.js 18+
-- npm 9+
+Este projeto nao usa mais GitHub Actions para build ou deploy. O fluxo esperado e:
 
-## Instalação e execução
+```bash
+git clone <repo>
+cd Gera-Sintegra
+cp .env.example .env
+docker compose up -d --build
+```
 
-### 1. Backend
+### Pre-requisitos
+
+- Docker e Docker Compose instalados na VPS
+- Rede Docker externa `shared-network` ja criada
+- Nginx raiz da VPS rodando em container e conectado a `shared-network`
+- Acesso a imagem hardened `dhi.io/mysql:9.6`
+
+Crie a rede externa uma unica vez, se ainda nao existir:
+
+```bash
+docker network create shared-network
+```
+
+### Roteamento esperado no Nginx raiz
+
+- `/` -> container `frontend` na porta `80`
+- `/api` -> container `backend` na porta `3001`
+
+O frontend continua consumindo a API em `/api`. Nenhuma porta da aplicacao e publicada diretamente no host pelo `docker-compose.yml`.
+
+## Variaveis de ambiente
+
+Copie `.env.example` para `.env` e ajuste:
+
+```env
+JWT_SECRET=troque-por-uma-chave-segura-longa-e-aleatoria
+FRONTEND_URL=https://seudominio.com.br
+MYSQL_ROOT_PASSWORD=senha-root-forte-aqui
+MYSQL_PASSWORD=senha-usuario-sintegra-aqui
+```
+
+## Desenvolvimento local
+
+### Backend
 
 ```bash
 cd backend
@@ -24,9 +62,9 @@ node prisma/seed.js
 npm run dev
 ```
 
-O backend sobe em `http://localhost:3001`.
+Backend em `http://localhost:3001`.
 
-### 2. Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -34,53 +72,14 @@ npm install
 npm run dev
 ```
 
-O frontend sobe em `http://localhost:5173`.
-
-## Acesso inicial
-
-| Campo | Valor |
-|-------|-------|
-| Email | neymar.messias@facilsistemas.com.br |
-| Senha | Assi2030@# |
-| Role  | MASTER |
-
-## Perfis de usuário
-
-| Role   | Permissões |
-|--------|-----------|
-| MASTER | Cadastra empresas e admins, vê todas as gerações |
-| ADMIN  | Gerencia usuários da própria empresa, gera SINTEGRA |
-| USER   | Gera SINTEGRA da própria empresa |
-
-## Fluxo de uso
-
-1. MASTER faz login e cadastra empresas (com usuário ADMIN inicial)
-2. ADMIN da empresa faz login e pode criar usuários adicionais
-3. Qualquer usuário logado acessa **Gerar SINTEGRA**:
-   - Seleciona o período
-   - Faz upload dos XMLs por tipo (Entrada 55 / Saída 55 / Saída 65)
-   - Clica em **Gerar** e aguarda
-   - Faz download do arquivo `.txt` gerado
-
-## Registros SINTEGRA gerados
-
-| Tipo | Fonte | Descrição |
-|------|-------|-----------|
-| 10 | Dados da empresa | Mestre do estabelecimento |
-| 11 | Dados da empresa | Dados complementares |
-| 50 | NF-e mod 55 | Total da nota por CFOP |
-| 54 | NF-e mod 55 | Itens/produtos da nota |
-| 60M | NFC-e mod 65 | Mestre de cupom (por dia/série) |
-| 60A | NFC-e mod 65 | Analítico por alíquota |
-| 75 | Todos os XMLs | Cadastro de produtos |
-| 90 | — | Totalizador geral |
+Frontend em `http://localhost:5173`.
 
 ## Estrutura do projeto
 
-```
+```text
 Gera-Sintegra/
-├── backend/          # Node.js + Express API
-├── frontend/         # React + Vite SPA
-├── python_legacy/    # Código Python original (referência)
-└── xml_*/            # Exemplos de XMLs para testes
+|-- backend/        # API Node.js + Express + Prisma
+|-- frontend/       # SPA React + Vite
+|-- python_legacy/  # Implementacao Python original
+`-- xml_*/          # XMLs de exemplo para teste
 ```
