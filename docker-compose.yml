@@ -10,7 +10,7 @@ services:
     volumes:
       - sintegra_mysql:/var/lib/mysql
     networks:
-      - app_internal
+      app_internal: {}
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 10s
@@ -36,8 +36,10 @@ services:
     expose:
       - "3001"
     networks:
-      - app_internal
-      - shared-network
+      app_internal: {}
+      shared-network:
+        aliases:
+          - gera-sintegra-backend
 
   frontend:
     build:
@@ -48,8 +50,10 @@ services:
     expose:
       - "80"
     networks:
-      - app_internal
-      - shared-network
+      app_internal: {}
+      shared-network:
+        aliases:
+          - gera-sintegra-frontend
 
 volumes:
   sintegra_mysql:
