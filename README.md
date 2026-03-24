@@ -6,7 +6,7 @@ Aplicacao web para geracao de arquivos SINTEGRA (Convenio ICMS 57/95) a partir d
 
 - Backend: Node.js 24 + Express + Prisma + MySQL + JWT
 - Frontend: React + Vite + Tailwind CSS
-- Infra: Docker Compose + Nginx + Docker Hardened Image `dhi.io/mysql:9.6`
+- Infra: Docker Compose + Nginx + MySQL `mysql:9.6.0`
 
 ## Deploy na VPS
 
@@ -24,7 +24,7 @@ docker compose up -d --build
 - Docker e Docker Compose instalados na VPS
 - Rede Docker externa `shared-network` ja criada
 - Nginx raiz da VPS rodando em container e conectado a `shared-network`
-- Acesso a imagem hardened `dhi.io/mysql:9.6`
+- Acesso a imagem publica `mysql:9.6.0`
 
 Crie a rede externa uma unica vez, se ainda nao existir:
 

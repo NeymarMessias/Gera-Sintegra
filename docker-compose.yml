@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: dhi.io/mysql:9.6
+    image: mysql:9.6.0
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
