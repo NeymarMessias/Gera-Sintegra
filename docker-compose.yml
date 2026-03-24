@@ -1,0 +1,38 @@
+services:
+
+  backend:
+    image: seu-usuario-dockerhub/gera-sintegra-backend:latest
+    # build: ./backend   # descomente para build local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: file:/app/data/production.db
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - sintegra_db:/app/data
+      - sintegra_uploads:/app/uploads
+    networks:
+      - sintegra_net
+
+  frontend:
+    image: seu-usuario-dockerhub/gera-sintegra-frontend:latest
+    # build: ./frontend  # descomente para build local
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"   # se usar HTTPS via reverse proxy externo, remova esta linha
+    depends_on:
+      - backend
+    networks:
+      - sintegra_net
+
+volumes:
+  sintegra_db:
+  sintegra_uploads:
+
+networks:
+  sintegra_net:
+    driver: bridge

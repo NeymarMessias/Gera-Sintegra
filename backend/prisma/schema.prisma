@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  cnpj        String   @unique
+  ie          String
+  uf          String
+  logradouro  String   @default("")
+  numero      String   @default("")
+  complemento String   @default("")
+  bairro      String   @default("")
+  cep         String   @default("")
+  municipio   String   @default("")
+  fone        String   @default("")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  generations Generation[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("USER")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  generations Generation[]
+}
+
+model Generation {
+  id          String   @id @default(cuid())
+  status      String   @default("PENDING")
+  periodStart DateTime
+  periodEnd   DateTime
+  outputFile  String?
+  errorMsg    String?
+  stats       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  files GenerationFile[]
+}
+
+model GenerationFile {
+  id           String   @id @default(cuid())
+  originalName String
+  storedPath   String
+  fileType     String
+  createdAt    DateTime @default(now())
+
+  generationId String
+  generation   Generation @relation(fields: [generationId], references: [id])
+}
