@@ -96,10 +96,13 @@ export const createTotal = () => ({
 })
 
 export const createNFe = () => ({
+  tipoDoc: 'NFE',
   chave: '',
   cNF: '',
   nNF: '',
   serie: '',
+  subserie: '',
+  cfop: '',
   modelo: '',
   tpNF: '',
   dhEmi: null,
@@ -115,4 +118,5 @@ export const createNFe = () => ({
   total: createTotal(),
   nProt: '',
   cStat: '',
+  cancelada: false,
 })

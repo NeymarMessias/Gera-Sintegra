@@ -30,7 +30,13 @@ export async function uploadZip(req, res, next) {
     try {
       const resultado = await sintegraService.extractAndClassifyArchive(id, req.file.path)
 
-      const total = resultado.entrada_55.length + resultado.saida_55.length + resultado.saida_65.length
+      const total =
+        resultado.entrada_55.length +
+        resultado.saida_55.length +
+        (resultado.entrada_65?.length || 0) +
+        resultado.saida_65.length +
+        (resultado.entrada_57_67?.length || 0) +
+        (resultado.saida_57_67?.length || 0)
 
       if (total === 0 && resultado.ignorados.length > 0) {
         return res.status(422).json({

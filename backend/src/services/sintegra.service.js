@@ -3,7 +3,7 @@ import path from 'path'
 import AdmZip from 'adm-zip'
 import { createExtractorFromFile } from 'node-unrar-js'
 import { prisma } from '../lib/prisma.js'
-import { parseXml } from '../engine/xmlReader.js'
+import { parseXml, parseXmlContent } from '../engine/xmlReaderV2.js'
 import { GeradorSintegra } from '../engine/index.js'
 import { UPLOAD_DIR } from '../config/env.js'
 import { normalizarUF } from '../utils/stringUtils.js'
@@ -12,37 +12,62 @@ import { normalizarUF } from '../utils/stringUtils.js'
  * Classifica e salva um buffer XML já extraído do arquivo compactado.
  * Reutilizado tanto pelo extrator ZIP quanto RAR.
  */
-async function _classificarXmlBuffer(generationId, nomeArquivo, xmlBuffer, resultado) {
-  const tmpDir = path.join(UPLOAD_DIR, 'tmp')
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+function _isXmlFileName(fileName) {
+  const n = String(fileName || '').replace(/\\/g, '/').trim().toLowerCase()
+  return n.endsWith('.xml')
+}
 
-  const tmpPath = path.join(
-    tmpDir,
-    `arch_${Date.now()}_${Math.random().toString(36).slice(2)}.xml`
-  )
+function _safeStoredName(fileName) {
+  const normalized = String(fileName || '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+    .join('__')
+  // evita caracteres problemáticos em nome de arquivo no Windows
+  return normalized.replace(/[<>:"|?*]/g, '_')
+}
 
+async function _classificarXmlBuffer(
+  generationId,
+  nomeArquivo,
+  xmlBuffer,
+  resultado,
+  cnpjEmpresa = '',
+  originalName = nomeArquivo
+) {
   try {
-    fs.writeFileSync(tmpPath, xmlBuffer)
-
-    const nfe = await parseXml(tmpPath)
+    const xmlContent = Buffer.isBuffer(xmlBuffer) ? xmlBuffer.toString('utf8') : String(xmlBuffer || '')
+    const nfe = await parseXmlContent(xmlContent, originalName)
     if (!nfe) {
       // Loga os primeiros 300 chars para diagnóstico
       try {
-        const preview = fs.readFileSync(tmpPath, 'utf8').slice(0, 300)
+        const preview = xmlContent.slice(0, 300)
         console.warn(`[archive] parseXml null para '${nomeArquivo}'. Início do conteúdo:\n${preview}`)
       } catch {}
       resultado.ignorados.push(nomeArquivo)
-      fs.unlinkSync(tmpPath)
       return
+    }
+
+    const cnpjEmit = String(nfe.emit?.CNPJ || '').replace(/\D/g, '')
+    const cnpjDest = String(nfe.dest?.CNPJ || '').replace(/\D/g, '')
+    const cnpjEmpresaLimpo = String(cnpjEmpresa || '').replace(/\D/g, '')
+
+    let isSaida
+    if (cnpjEmpresaLimpo && cnpjEmit) {
+      isSaida = cnpjEmit === cnpjEmpresaLimpo
+    } else if (cnpjEmpresaLimpo && cnpjDest && !cnpjEmit) {
+      isSaida = cnpjDest !== cnpjEmpresaLimpo
+    } else {
+      isSaida = nfe.tpNF === '1'
     }
 
     let fileType
     if (nfe.modelo === '65') {
-      fileType = 'saida_65'
-    } else if (nfe.tpNF === '0') {
-      fileType = 'entrada_55'
+      fileType = isSaida ? 'saida_65' : 'entrada_65'
+    } else if (nfe.modelo === '57' || nfe.modelo === '67') {
+      fileType = isSaida ? 'saida_57_67' : 'entrada_57_67'
     } else {
-      fileType = 'saida_55'
+      fileType = isSaida ? 'saida_55' : 'entrada_55'
     }
 
     const destDir = path.join(UPLOAD_DIR, generationId, fileType)
@@ -55,45 +80,66 @@ async function _classificarXmlBuffer(generationId, nomeArquivo, xmlBuffer, resul
       destPath = path.join(destDir, `${base}_${Date.now()}${ext}`)
     }
 
-    fs.renameSync(tmpPath, destPath)
+    fs.writeFileSync(destPath, xmlBuffer)
 
     await prisma.generationFile.create({
       data: {
-        originalName: nomeArquivo,
+        originalName,
         storedPath: destPath,
         fileType,
         generationId,
       },
     })
 
-    resultado[fileType].push(nomeArquivo)
+    resultado[fileType].push(originalName)
   } catch (err) {
-    console.error(`[archive] Erro ao processar '${nomeArquivo}':`, err.message)
-    resultado.ignorados.push(nomeArquivo)
-    try { fs.unlinkSync(tmpPath) } catch {}
+    console.error(`[archive] Erro ao processar '${originalName}':`, err.message)
+    resultado.ignorados.push(originalName)
   }
 }
 
 /**
  * Extrai um arquivo .zip ou .rar, identifica automaticamente o tipo de cada XML
- * (entrada_55 / saida_55 / saida_65) e salva os arquivos na geração.
+ * (entrada_55 / saida_55 / entrada_65 / saida_65 / entrada_57_67 / saida_57_67)
+ * e salva os arquivos na geração.
  *
  * @param {string} generationId
  * @param {string} archivePath  Caminho do arquivo .zip ou .rar no disco
- * @returns {{ entrada_55: string[], saida_55: string[], saida_65: string[], ignorados: string[] }}
+ * @returns {{ entrada_55: string[], saida_55: string[], entrada_65: string[], saida_65: string[], entrada_57_67: string[], saida_57_67: string[], ignorados: string[] }}
  */
 export async function extractAndClassifyArchive(generationId, archivePath) {
-  const resultado = { entrada_55: [], saida_55: [], saida_65: [], ignorados: [] }
+  const resultado = {
+    entrada_55: [],
+    saida_55: [],
+    entrada_65: [],
+    saida_65: [],
+    entrada_57_67: [],
+    saida_57_67: [],
+    ignorados: [],
+  }
   const ext = path.extname(archivePath).toLowerCase()
+  const generation = await prisma.generation.findUnique({
+    where: { id: generationId },
+    include: { company: true },
+  })
+  const cnpjEmpresa = generation?.company?.cnpj || ''
 
   if (ext === '.zip') {
     const zip = new AdmZip(archivePath)
     const entries = zip.getEntries().filter(
-      (e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.xml')
+      (e) => !e.isDirectory && _isXmlFileName(e.entryName)
     )
     for (const entry of entries) {
-      const nomeArquivo = path.basename(entry.entryName)
-      await _classificarXmlBuffer(generationId, nomeArquivo, entry.getData(), resultado)
+      const originalName = String(entry.entryName || '').replace(/\\/g, '/')
+      const nomeArquivo = _safeStoredName(originalName)
+      await _classificarXmlBuffer(
+        generationId,
+        nomeArquivo,
+        entry.getData(),
+        resultado,
+        cnpjEmpresa,
+        originalName
+      )
     }
   } else if (ext === '.rar') {
     const absolutePath = path.resolve(archivePath)
@@ -119,9 +165,10 @@ export async function extractAndClassifyArchive(generationId, archivePath) {
       // Itera os headers para obter os nomes dos arquivos extraídos
       for (const file of extracted.files) {
         const name = file?.fileHeader?.name || ''
-        if (file?.fileHeader?.flags?.directory || !name.toLowerCase().endsWith('.xml')) continue
+        if (file?.fileHeader?.flags?.directory || !_isXmlFileName(name)) continue
 
-        const nomeArquivo = path.basename(name)
+        const originalName = String(name).replace(/\\/g, '/')
+        const nomeArquivo = _safeStoredName(originalName)
         // O arquivo foi extraído em extractDir mantendo a estrutura interna do RAR
         const extractedPath = path.join(extractDir, name)
 
@@ -135,10 +182,17 @@ export async function extractAndClassifyArchive(generationId, archivePath) {
         console.log(`[archive:rar] Lido '${nomeArquivo}' - ${xmlBuffer.length} bytes`)
 
         try {
-          await _classificarXmlBuffer(generationId, nomeArquivo, xmlBuffer, resultado)
+          await _classificarXmlBuffer(
+            generationId,
+            nomeArquivo,
+            xmlBuffer,
+            resultado,
+            cnpjEmpresa,
+            originalName
+          )
         } catch (err) {
-          console.error(`[archive:rar] Erro ao processar '${nomeArquivo}':`, err.message)
-          resultado.ignorados.push(nomeArquivo)
+          console.error(`[archive:rar] Erro ao processar '${originalName}':`, err.message)
+          resultado.ignorados.push(originalName)
         }
       }
     } finally {
@@ -153,7 +207,10 @@ export async function extractAndClassifyArchive(generationId, archivePath) {
     formato: ext,
     entrada_55: resultado.entrada_55.length,
     saida_55: resultado.saida_55.length,
+    entrada_65: resultado.entrada_65.length,
     saida_65: resultado.saida_65.length,
+    entrada_57_67: resultado.entrada_57_67.length,
+    saida_57_67: resultado.saida_57_67.length,
     ignorados: resultado.ignorados.length,
   })
 
@@ -214,7 +271,7 @@ export async function run(generationId, userId, { codFinalidade = '1', codConven
     if (errosXml.length > 0 && notas.length === 0) {
       throw new Error(
         `Nenhum XML válido encontrado. Arquivos com erro ou formato inválido: ${errosXml.join(', ')}. ` +
-        `Verifique se os arquivos são NF-e (modelo 55) ou NFC-e (modelo 65) válidos.`
+        `Verifique se os arquivos são NF-e/NFC-e/CT-e válidos (modelos 55, 65, 57 ou 67).`
       )
     }
 
@@ -225,15 +282,16 @@ export async function run(generationId, userId, { codFinalidade = '1', codConven
     // Separa por modelo
     const notas55 = notas.filter((n) => n.modelo === '55')
     const notas65 = notas.filter((n) => n.modelo === '65')
+    const notas57e67 = notas.filter((n) => n.modelo === '57' || n.modelo === '67')
 
     // Valida CNPJ do emitente nas notas de saída: deve bater com o CNPJ da empresa
     const cnpjEmpresa = (generation.company.cnpj || '').replace(/\D/g, '')
     const alertasCnpj = []
 
     for (const nfe of notas) {
-      const isSaida = nfe.tpNF === '1' || nfe.modelo === '65'
+      const cnpjEmit = (nfe.emit?.CNPJ || '').replace(/\D/g, '')
+      const isSaida = cnpjEmit && cnpjEmpresa ? cnpjEmit === cnpjEmpresa : nfe.tpNF === '1'
       if (isSaida) {
-        const cnpjEmit = (nfe.emit?.CNPJ || '').replace(/\D/g, '')
         if (cnpjEmit && cnpjEmit !== cnpjEmpresa) {
           alertasCnpj.push({
             nNF: nfe.nNF,
@@ -306,7 +364,7 @@ export async function run(generationId, userId, { codFinalidade = '1', codConven
       codConvenio,
       codNatureza,
     })
-    const stats = await gerador.gerar(notas55, notas65, outputPath)
+    const stats = await gerador.gerar(notas55, notas65, notas57e67, outputPath)
 
     // Atualiza geração com status DONE
     const updated = await prisma.generation.update({

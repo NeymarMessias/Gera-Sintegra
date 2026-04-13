@@ -61,6 +61,103 @@ export function registro10(emit, dtIni, dtFin, {
   return reg
 }
 
+export function registro61({
+  dtEmissao,
+  mod = '65',
+  serie,
+  subserie = '',
+  numOrdemIni,
+  numOrdemFim,
+  vlTotal,
+  vlBcIcms,
+  vlIcms,
+  vlIsento,
+  vlOutros,
+  aliqIcms = '0',
+}) {
+  const reg =
+    '61' +
+    ' '.repeat(14) +
+    ' '.repeat(14) +
+    data(dtEmissao) +
+    num(mod, 2) +
+    alfa(serie, 3) +
+    alfa(subserie, 2) +
+    num(numOrdemIni, 6) +
+    num(numOrdemFim, 6) +
+    num(vlTotal, 13, 2) +
+    num(vlBcIcms, 13, 2) +
+    num(vlIcms, 12, 2) +
+    num(vlIsento, 13, 2) +
+    num(vlOutros, 13, 2) +
+    num(aliqIcms, 4, 2) +
+    ' '
+  validar(reg, '61')
+  return reg
+}
+
+export function registro61r({
+  mesAno,
+  codProduto,
+  qtd,
+  vlBruto,
+  vlBcIcms,
+  aliqIcms = '0',
+}) {
+  const reg =
+    '61' +
+    'R' +
+    num(mesAno, 6) +
+    alfa(codProduto, 14) +
+    num(qtd, 13, 3) +
+    num(vlBruto, 16, 2) +
+    num(vlBcIcms, 16, 2) +
+    num(aliqIcms, 4, 2) +
+    ' '.repeat(54)
+  validar(reg, '61R')
+  return reg
+}
+
+export function registro70({
+  cnpjOp,
+  ieOp,
+  dtEmissao,
+  ufOp,
+  mod,
+  serie,
+  subserie = '',
+  numero,
+  cfop,
+  vlTotal,
+  vlBcIcms,
+  vlIcms,
+  vlIsento,
+  vlOutros,
+  cifFob = '1',
+  situacao = 'N',
+}) {
+  const reg =
+    '70' +
+    cnpj(cnpjOp) +
+    ie(ieOp, ufOp) +
+    data(dtEmissao) +
+    alfa(normalizarUF(ufOp), 2) +
+    num(mod, 2) +
+    alfa(serie, 1) +
+    alfa(subserie, 2) +
+    num(numero, 6) +
+    num(cfop, 3) +
+    num(vlTotal, 14, 2) +
+    num(vlBcIcms, 14, 2) +
+    num(vlIcms, 14, 2) +
+    num(vlIsento, 14, 2) +
+    num(vlOutros, 14, 2) +
+    num(cifFob, 1) +
+    alfa(situacao, 1)
+  validar(reg, '70')
+  return reg
+}
+
 /**
  * Tipo 11 - Dados Complementares do Estabelecimento (1 por arquivo).
  * Layout 126 chars:
@@ -180,7 +277,6 @@ export function registro53({
   serie,
   numero,
   cfop,
-  emitente,
   vlBcIcmsST,
   vlIcmsST,
   vlBcSTRet = '0',
@@ -199,15 +295,14 @@ export function registro53({
     alfa(serie, 3) +
     num(numero, 6) +
     num(cfop, 4) +
-    alfa(emitente, 1) +
     num(vlBcIcmsST, 13, 2) +
     num(vlIcmsST, 13, 2) +
     num(vlBcSTRet, 13, 2) +
     num(vlIcmsSTRet, 13, 2) +
     num(vlRedBcST, 13, 2) +
-    num(codST, 3) +
     alfa(situacao, 1) +
-    ' '
+    num(codST, 3) +
+    '  '
   validar(reg, '53')
   return reg
 }
@@ -362,11 +457,10 @@ export function registro60a({
  *  33-40  NCM            8X
  *  41-93  Descricao     53X
  *  94-99  Unidade        6X
- * 100-102 SitTrib        3N  CST ICMS
- * 103-106 AliqIpi        4N  2 dec
- * 107-110 AliqIcms       4N  2 dec
- * 111-114 RedBcIcms      4N  2 dec
- * 115-126 BcIcmsST      12N  2 dec
+ * 100-104 AliqIpi        5N  2 dec
+ * 105-108 AliqIcms       4N  2 dec
+ * 109-113 RedBcIcms      5N  2 dec
+ * 114-126 BcIcmsST      13N  2 dec
  */
 export function registro75({
   dtIni,
@@ -390,11 +484,10 @@ export function registro75({
     ncmNum +
     alfa(descProduto, 53) +
     alfa(unidade, 6) +
-    num(sitTrib, 3) +
-    num(aliqIpi, 4, 2) +
+    num(aliqIpi, 5, 2) +
     num(aliqIcms, 4, 2) +
-    num(redBcIcms, 4, 2) +
-    num(bcIcmsST, 12, 2)
+    num(redBcIcms, 5, 2) +
+    num(bcIcmsST, 13, 2)
   validar(reg, '75')
   return reg
 }
